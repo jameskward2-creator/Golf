@@ -280,6 +280,10 @@ td input{max-width:58%;text-align:right;border-color:var(--line)}}
   <h3 class="sub">Video library</h3>
   <div class="row-btn" style="margin-top:0;margin-bottom:12px">
     <label class="act" style="display:inline-flex;align-items:center;cursor:pointer;margin:0">Import a video<input type="file" accept="video/*,.mov,.MOV,.mp4,.m4v,.webm,.avi,.mkv" onchange="importVid(event)" style="display:none"></label>
+    <select id="vidAngle" style="max-width:180px" onchange="if(typeof labNotes==='function')labNotes()">
+      <option>Down-the-line</option><option>Face-on</option></select>
+    <select id="autoGuideOn" style="max-width:190px">
+      <option value="1">Auto-draw plane lines</option><option value="0">No automatic lines</option></select>
   </div>
   <div id="labStatus"></div>
   <div id="vlib"></div>
@@ -308,7 +312,7 @@ td input{max-width:58%;text-align:right;border-color:var(--line)}}
       <button onclick="setTool('line',this)">Line</button><button class="on" onclick="setTool('plane',this)">Plane</button>
       <button onclick="setTool('vline',this)">Vertical</button><button onclick="setTool('hline',this)">Horizontal</button>
       <button onclick="setTool('circle',this)">Circle</button><button onclick="setTool('angle',this)">Angle</button>
-      <button onclick="setTool('free',this)">Freehand</button><button onclick="undoDraw()">Undo</button><button onclick="clearDraw()">Clear</button></div>
+      <button onclick="setTool('free',this)">Freehand</button><button onclick="undoDraw()">Undo</button><button onclick="clearDraw()">Clear mine</button><button onclick="clearAll()">Clear all</button></div>
     <div class="toolbar"><span class="lbl">Colour</span>
       <button class="swatch on" style="background:#E8C61F" onclick="setColor('#E8C61F',this)"></button>
       <button class="swatch" style="background:#2ED4C6" onclick="setColor('#2ED4C6',this)"></button>
@@ -1106,10 +1110,10 @@ function importVid(ev){
    ()=>{
     labSay(`<div class="rec ok"><div class="h">${esc(f.name)} is playing</div><p>${info.mb} MB · ${esc(info.declared)} · ${(V.__dur||0).toFixed(1)}s · ${V.videoWidth}×${V.videoHeight}. Analysing the swing now.</p></div>`);
     analyzeByPlayback(V,{onProg:p=>labSay(`<div class="card"><span class="spinner" style="display:inline-block;vertical-align:-3px;margin-right:8px"></span>Watching the swing… ${Math.round(p*100)}%</div>`)}).then(r=>{
-     CUR={id:uid(),club:'Imported',date:new Date().toISOString().slice(0,10),angle:document.getElementById('vidAngle').value,
+     CUR={id:uid(),club:'Imported',date:new Date().toISOString().slice(0,10),angle:angleNow(),
       times:r.kf.times,path:r.path,thumb:r.thumb,imgs:r.imgs};
      if(r.strip&&r.strip.length){Store.set('golf:strip:'+CUR.id,JSON.stringify(r.strip));STRIP=r.strip;stripI=0;renderStrip()}
-     redraw();labNotes();
+     redraw();labNotes();autoPlanes();
      labSay(`<div class="rec ok"><div class="h">Analysed</div><p>Swing positions found and ${r.path?'club path traced across '+r.path.length+' frames':'path tracing did not lock on — the background may be too busy'}. Use the Positions buttons to jump between address, top, impact and finish.</p></div>`)})
     .catch(e=>{console.error('analyse',e);
      labSay(`<div class="rec warn"><div class="h">Plays fine, but the swing analysis failed</div><p>${esc(e.message||e)}</p><p style="margin-top:6px">Playback, scrubbing and the manual drawing tools all still work — you can draw plane lines by hand.</p></div>`)})},
@@ -1210,7 +1214,8 @@ function drawPath(){
 function redraw(){if(!X)return;X.clearRect(0,0,C.width,C.height);drawPath();shapes.forEach(drawShape);if(drawing)drawShape(drawing)}
 if(typeof requestAnimationFrame!=='undefined'){(function loop(){if(X&&V&&!V.paused)redraw();requestAnimationFrame(loop)})()}
 function undoDraw(){shapes.pop();redraw()}
-function clearDraw(){shapes=[];drawing=null;redraw()}
+function clearDraw(){shapes=shapes.filter(s=>s.auto);drawing=null;redraw()}
+function clearAll(){shapes=[];drawing=null;redraw()}
 async function autoGuides(){
  if(!V||!V.videoWidth){alert('Open a clip first.');return}
  const el=document.getElementById('labOut');
@@ -1218,7 +1223,7 @@ async function autoGuides(){
  const c=document.createElement('canvas');c.width=420;c.height=Math.round(420*(V.videoHeight/V.videoWidth));
  c.getContext('2d').drawImage(V,0,0,c.width,c.height);
  const b64=c.toDataURL('image/jpeg',.8).split(',')[1];
- const angle=(CUR&&CUR.angle)||'Down-the-line';
+ const angle=angleNow();
  const prompt=`A frame from a golf swing filmed ${angle}. Give normalized coordinates 0-1, [0,0] top-left.
 Return ONLY raw JSON: {"found":true|false,"hands":[x,y]|null,"clubhead":[x,y]|null,"ball":[x,y]|null,"head":[x,y]|null,"hips":[x,y]|null,"note":string}
 note = under 25 words on what this position shows and anything notable about it.`;
@@ -1238,7 +1243,7 @@ note = under 25 words on what this position shows and anything notable about it.
   el.innerHTML=`<div class="rec ok"><div class="h">Guides drawn</div><p>Yellow is the shaft plane, white is your head line, red is your hip line. ${esc(p.note||'')} Placed by eye from one frame — drag your own over them if they sit off.</p></div>`+labNotesHTML();
  }catch(e){el.innerHTML='<div class="rec warn"><div class="h">Could not place guides</div><p>Try a frame where the golfer and club are clearly visible, or use the plane tool yourself.</p></div>'+labNotesHTML()}}
 function labNotesHTML(){
- const a=(CUR&&CUR.angle)||'Down-the-line';
+ const a=angleNow();
  const N={'Down-the-line':[['Address','Draw a plane line up the shaft. Where it crosses your body is the reference for everything after.'],
   ['Top','With a short backswing the question is not length but whether the club is on plane. Do not chase length your mobility will not give you.'],
   ['Impact','Vertical line on the hips from address. Hips moved toward the ball is early extension — this is your frame.'],
@@ -1248,6 +1253,87 @@ function labNotesHTML(){
   ['Impact','Sternum ahead of the ball, pressure in the lead foot. Your weight-transfer frame.'],
   ['Finish','Balanced on the lead side, chest to target. Cannot hold three seconds means no transfer.']]};
  return (N[a]||[]).map(([k,v])=>`<div class="rec"><div class="h">${k}</div><p>${v}</p></div>`).join('')}
+
+function angleNow(){const e=document.getElementById('vidAngle');return (e&&e.value)||(CUR&&CUR.angle)||'Down-the-line'}
+/* least-squares line through normalised points, plus its steepness from horizontal */
+function planeFit(pts){
+ if(!pts||pts.length<4)return null;
+ const n=pts.length;let sx=0,sy=0,sxy=0,sxx=0;
+ pts.forEach(p=>{sx+=p.x;sy+=p.y;sxy+=p.x*p.y;sxx+=p.x*p.x});
+ const den=n*sxx-sx*sx;if(Math.abs(den)<1e-9)return null;
+ const m=(n*sxy-sx*sy)/den,b=(sy-m*sx)/n;
+ const x0=Math.min(...pts.map(p=>p.x)),x1=Math.max(...pts.map(p=>p.x));
+ return{m,b,x0,x1,steep:Math.abs(Math.atan(m)*180/Math.PI)}}
+function segAngle(a,b){return Math.abs(Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI)%180}
+async function autoPlanes(){
+ if(!V||!V.videoWidth||!CUR)return;
+ const on=(document.getElementById('autoGuideOn')||{}).value!=='0';
+ if(!on)return;
+ const out=document.getElementById('labOut');
+ const prev=out.innerHTML;
+ out.innerHTML='<div class="card"><span class="spinner" style="display:inline-block;vertical-align:-3px;margin-right:8px"></span>Placing plane lines…</div>';
+
+ /* the delivery plane comes free from the traced club path */
+ let dl=null;
+ if(CUR.path&&CUR.path.length>4){
+  const half=CUR.path.slice(Math.floor(CUR.path.length*0.35));
+  dl=planeFit(half);
+  if(dl){
+   const P=(x,y)=>({x:x*C.width,y:y*C.height});
+   const a=P(dl.x0,dl.m*dl.x0+dl.b),b=P(dl.x1,dl.m*dl.x1+dl.b);
+   shapes.push({t:'plane',color:'#FF8A3D',a,b,auto:true});
+  }}
+
+ /* the address shaft plane needs to see the golfer — one vision call on the address frame */
+ let land=null;
+ try{
+  if(CUR.times)V.currentTime=CUR.times[0];
+  await new Promise(r=>setTimeout(r,220));
+  const c=document.createElement('canvas');
+  c.width=420;c.height=Math.round(420*(V.videoHeight/V.videoWidth));
+  c.getContext('2d').drawImage(V,0,0,c.width,c.height);
+  const b64=c.toDataURL('image/jpeg',.8).split(',')[1];
+  const prompt=`Address position of a golf swing filmed ${angleNow()}. Give normalised coordinates 0-1, [0,0] top-left.
+Return ONLY raw JSON: {"found":true|false,"hands":[x,y]|null,"clubhead":[x,y]|null,"ball":[x,y]|null,"head":[x,y]|null,"hips":[x,y]|null}`;
+  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:300,messages:[{role:"user",content:[
+    {type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:prompt}]}]})});
+  const d=await res.json();
+  land=JSON.parse((d.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('').replace(/```json|```/g,'').trim());
+ }catch(e){land=null}
+
+ let addrAngle=null;
+ if(land&&land.found){
+  const P=a=>({x:a[0]*C.width,y:a[1]*C.height});
+  if(land.hands&&land.clubhead){
+   const A=P(land.hands),B=P(land.clubhead);
+   shapes.push({t:'plane',color:'#E8C61F',a:A,b:B,auto:true});
+   addrAngle=segAngle({x:land.hands[0],y:land.hands[1]},{x:land.clubhead[0],y:land.clubhead[1]});
+  }
+  if(land.head)shapes.push({t:'vline',color:'#FFFFFF',a:P(land.head),auto:true});
+  if(land.hips)shapes.push({t:'vline',color:'#FF5C4D',a:P(land.hips),auto:true});
+  if(land.ball){const bb=P(land.ball);shapes.push({t:'circle',color:'#FFFFFF',a:bb,b:{x:bb.x+9,y:bb.y},auto:true})}
+ }
+ redraw();
+
+ let msg='';
+ if(dl&&addrAngle!==null){
+  const diff=dl.steep-addrAngle;
+  const dir=diff>4?'steeper than':diff<-4?'shallower than':'close to';
+  msg=`<div class="rec ${Math.abs(diff)>8?'warn':'ok'}"><div class="h">Delivery plane vs address plane — ${Math.abs(diff).toFixed(0)}° ${dir==='close to'?'apart':dir.replace(' than','')}</div>
+   <p>Yellow is the shaft line you set at address. Orange is the line your clubhead actually travelled on coming down. Yours came in <strong>${dir}</strong> the plane you started on.
+   ${diff>8?' A markedly steeper delivery is the geometric signature of coming over the top — the club is being thrown out and down rather than dropping. That is what Block 1 targets.':''}
+   ${diff<-8?' A shallower delivery than address usually means the club has dropped well inside. Watch for a hook or a push if the face does not match.':''}
+   ${Math.abs(diff)<=8?' That is a reasonable match — the club is returning near the plane it started on.':''}</p>
+   <p style="margin-top:6px;font-size:13px;opacity:.85">Camera position changes these numbers, so treat the trend across sessions as the real signal rather than any single figure.</p></div>`;
+ } else if(dl){
+  msg=`<div class="rec"><div class="h">Delivery plane drawn</div><p>Orange is the line your clubhead travelled on coming down, fitted through the traced path. The address shaft line could not be placed automatically — draw it yourself with the plane tool for the comparison.</p></div>`;
+ } else if(land&&land.found){
+  msg=`<div class="rec"><div class="h">Address lines drawn</div><p>Yellow is the shaft plane, white your head line, red your hips. The club path did not trace cleanly enough to fit a delivery plane on this one.</p></div>`;
+ } else {
+  msg=`<div class="rec warn"><div class="h">Could not place the lines automatically</div><p>The golfer or club was not clear enough in the address frame. The plane tool still works by hand.</p></div>`;
+ }
+ out.innerHTML=msg+prev}
 function labNotes(noVid){
  let h='';
  if(CUR&&CUR.path)h+=`<div class="rec ok"><div class="h">Club path traced</div><p>The cyan arc is the clubhead route through your downswing, tracked from motion between frames. It fills in as the video plays. It is an approximation — busy backgrounds and motion blur both throw it off — so read the shape, not the exact pixels.</p></div>`;
