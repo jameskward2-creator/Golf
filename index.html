@@ -3300,7 +3300,7 @@ function upBag(i,k,v){S.bag[i][k]=v;save('golf:bag',S.bag);renderBag()}
 function addClub(){S.bag.push({club:'New club',model:'',loft:'',shaft:'',lie:'',len:''});renderBag()}
 function delClub(i){S.bag.splice(i,1);save('golf:bag',S.bag);renderBag()}
 function resetBag(){S.bag=JSON.parse(JSON.stringify(STD_BAG));saveBag()}
-function saveBag(){save('golf:bag',S.bag,'savedBag');renderBag();renderBench();colClubs()}
+function saveBag(){save('golf:bag',S.bag,'savedBag');renderBag();renderBench()
 function renderLadder(rows){
  const el=document.getElementById('ladder'),cl=rows.filter(r=>r.carry!==null);
  if(!cl.length){el.innerHTML='<div class="empty">Film some shots and this chart builds itself.</div>';return}
@@ -4296,7 +4296,7 @@ function renderAll(){renderShots();renderLib();renderBag();renderTopBag();render
  const cu=document.getElementById('camUrl');if(cu&&SRC.url)cu.value=SRC.url;
  const gw=document.getElementById('gsWs');if(gw&&S.__gs&&S.__gs.ws)gw.value=S.__gs.ws;
  const gsc=document.getElementById('gsSource');if(gsc&&S.__gs&&S.__gs.src)gsc.value=S.__gs.src;
- listCams(false);visInit();colClubs();if(S.__labmode)labMode(S.__labmode);
+ listCams(false);visInit();if(S.__labmode)labMode(S.__labmode);
  const gc=document.getElementById('gsCard');
  if(gc&&!(navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia))
   gc.querySelector('p').innerHTML='Screen capture needs a desktop browser. On a PC running GSPro, open this same link in Chrome or Edge and the collector appears here.';
